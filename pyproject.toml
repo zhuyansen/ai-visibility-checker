@@ -1,20 +1,32 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-visibility-checker"
-version = "0.1.0"
-description = "Can AI crawlers and agents read your site? 26 checks, 100 points, and a prompt for a coding agent to fix what failed."
+version = "0.2.0"
+description = "Can AI crawlers and agents read your site? 22 scored checks out of 100, 4 experimental standards reported apart, and a prompt for a coding agent to fix what failed."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Jason Zhu" }]
 keywords = ["ai-visibility", "geo", "llms-txt", "robots-txt", "seo", "ai-crawlers", "agent-readiness"]
 dependencies = []
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Internet :: WWW/HTTP :: Site Management",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+]
 
 [project.urls]
 Homepage = "https://github.com/zhuyansen/ai-visibility-checker"
+Changelog = "https://github.com/zhuyansen/ai-visibility-checker/releases"
+Issues = "https://github.com/zhuyansen/ai-visibility-checker/issues"
 "Web version" = "https://jasonzhu.ai/en/go-global/ai-readiness"
 
 [project.scripts]

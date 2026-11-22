@@ -2,14 +2,18 @@
 """
 ai-visibility-checker: can AI crawlers and agents read, understand and use a website?
 
-26 checks in 7 categories, 100 points. The categories, the checks and their point values follow
-Hostinger's free AI Visibility Checker, so a score here can be read next to one there. The code,
+26 checks in two tiers. The 22 that AI crawlers and agents use today make the score, out of 100.
+The 4 experimental standards (llms.txt, WebMCP, an MCP Server Card) are reported apart, with their
+fixes, and never added to the score: EXPERIMENTAL_WHY says why for each.
+
+The checks and their categories follow Hostinger's free AI Visibility Checker. The scoring does not:
+each scored check keeps its share of Hostinger's points (`hostinger`), scaled from 83 to 100. The code,
 the wording and the fix prompts are our own; this project is not affiliated with Hostinger.
 
 Usage:
-  python3 ai_visibility_checker.py example.com
-  python3 ai_visibility_checker.py example.com --prompts
-  python3 ai_visibility_checker.py example.com --json
+  ai-visibility-checker example.com
+  ai-visibility-checker example.com --json
+  ai-visibility-checker example.com --no-prompts
 """
 
 from __future__ import annotations
@@ -27,6 +31,8 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from typing import Any
+
+__version__ = "0.2.0"
 
 AI_AGENT_UA = (
     "Mozilla/5.0 (compatible; ChatGPT-User/1.0; +https://openai.com/bot) "
@@ -48,25 +54,53 @@ EDITORIAL_PATH_RE = re.compile(
     r"/(?:blog|news|post|posts|article|articles)(?:/|$)|/\d{4}/", re.I
 )
 
+# The scored categories and their points, out of 100. Experimental checks belong to none of them.
 CATEGORIES = [
-    ("crawl_permission", "Crawl permission", 20),
-    ("readability", "Readability", 18),
-    ("findability", "Findability", 16),
-    ("structured_meaning", "Structured meaning", 14),
-    ("commercial_legibility", "Commercial legibility", 12),
-    ("agent_native_content", "Agent-native content", 10),
-    ("agent_interaction", "Agent interaction", 10),
+    ("crawl_permission", "Crawl permission", 23),
+    ("readability", "Readability", 23),
+    ("findability", "Findability", 20),
+    ("structured_meaning", "Structured meaning", 16),
+    ("commercial_legibility", "Commercial legibility", 15),
+    ("agent_native_content", "Agent-native content", 3),
 ]
+EXPERIMENTAL = ("experimental", "Experimental standards")
 
+# Why each experimental check stays out of the score (sources read 2026-11-21). A check moves into
+# the score once agents use it.
+_LLMS_TXT_WHY = (
+    'Google: "You don\'t need to create new machine readable files, AI text files, or markup to appear in '
+    'these features" (developers.google.com/search/docs/appearance/ai-features). Ahrefs, 2026-06-15: 97% of '
+    "the llms.txt files on 137,210 sites got no traffic in May 2026 (ahrefs.com/blog/llmstxt-study)."
+)
+EXPERIMENTAL_WHY = {
+    "agent_native_content.llms_txt_exists": _LLMS_TXT_WHY,
+    "agent_native_content.llms_txt_quality": _LLMS_TXT_WHY,
+    "agent_interaction.webmcp_tools": (
+        "WebMCP is still an origin trial in Chrome: Lighthouse's WebMCP audits require registering for it "
+        "(developer.chrome.com/docs/lighthouse/agentic-browsing/scoring)."
+    ),
+    "agent_interaction.mcp_server_card": (
+        "Cloudflare, 2026-04-17: on the 200,000 most visited domains, MCP Server Cards and API Catalogs "
+        "together appear on fewer than 15 sites (blog.cloudflare.com/agent-readiness)."
+    ),
+}
+
+# Each check: `hostinger` is its points in Hostinger's checker (26 checks, 100 points). A scored check's
+# `weight` is that times 100/83, the 83 points left once the experimental 17 are out, in whole points that
+# add up to 100: largest remainders first; of the six 3-point checks (3.61 each), five round up and
+# Content-Signal, the one with the least evidence that agents act on it, stays at 3. Experimental: weight 0.
+# The ids are those of 0.1.0, so JSON read before still matches.
 CHECK_SPECS: list[dict[str, Any]] = [
-    # 1. Crawl permission (20 pts)
+    # 1. Crawl permission (23 pts)
     {
         "id": "crawl_permission.robots_txt_valid",
         "category": "crawl_permission",
         "category_label": "Crawl permission",
         "name": "robots.txt can be fetched and read",
         "short_name": "robots.txt readable",
-        "weight": 4,
+        "weight": 5,
+        "tier": "scored",
+        "hostinger": 4,
     },
     {
         "id": "crawl_permission.ai_crawlers_allowed",
@@ -74,7 +108,9 @@ CHECK_SPECS: list[dict[str, Any]] = [
         "category_label": "Crawl permission",
         "name": "robots.txt lets the major AI crawlers in",
         "short_name": "AI crawlers allowed",
-        "weight": 7,
+        "weight": 8,
+        "tier": "scored",
+        "hostinger": 7,
     },
     {
         "id": "crawl_permission.not_bot_blocked",
@@ -82,7 +118,9 @@ CHECK_SPECS: list[dict[str, Any]] = [
         "category_label": "Crawl permission",
         "name": "An AI agent gets the page, not a bot challenge",
         "short_name": "No bot challenge",
-        "weight": 6,
+        "weight": 7,
+        "tier": "scored",
+        "hostinger": 6,
     },
     {
         "id": "crawl_permission.content_signals",
@@ -91,15 +129,19 @@ CHECK_SPECS: list[dict[str, Any]] = [
         "name": "robots.txt says how the content may be used (Content-Signal)",
         "short_name": "Content-Signal line",
         "weight": 3,
+        "tier": "scored",
+        "hostinger": 3,
     },
-    # 2. Readability (18 pts)
+    # 2. Readability (23 pts)
     {
         "id": "readability.content_without_js",
         "category": "readability",
         "category_label": "Readability",
         "name": "The main text is in the HTML the server sends",
         "short_name": "Text without JavaScript",
-        "weight": 8,
+        "weight": 10,
+        "tier": "scored",
+        "hostinger": 8,
     },
     {
         "id": "readability.token_budget",
@@ -107,7 +149,9 @@ CHECK_SPECS: list[dict[str, Any]] = [
         "category_label": "Readability",
         "name": "The page is not padded with markup",
         "short_name": "Lean page",
-        "weight": 3,
+        "weight": 4,
+        "tier": "scored",
+        "hostinger": 3,
     },
     {
         "id": "readability.head_metadata",
@@ -115,7 +159,9 @@ CHECK_SPECS: list[dict[str, Any]] = [
         "category_label": "Readability",
         "name": "The page has a title, a description and a canonical URL",
         "short_name": "Title, description, canonical",
-        "weight": 4,
+        "weight": 5,
+        "tier": "scored",
+        "hostinger": 4,
     },
     {
         "id": "readability.heading_structure",
@@ -123,16 +169,20 @@ CHECK_SPECS: list[dict[str, Any]] = [
         "category_label": "Readability",
         "name": "One H1 that names the page",
         "short_name": "One clear H1",
-        "weight": 3,
+        "weight": 4,
+        "tier": "scored",
+        "hostinger": 3,
     },
-    # 3. Findability (16 pts)
+    # 3. Findability (20 pts)
     {
         "id": "findability.sitemap_valid",
         "category": "findability",
         "category_label": "Findability",
         "name": "A sitemap can be fetched and lists pages",
         "short_name": "Sitemap with pages",
-        "weight": 5,
+        "weight": 6,
+        "tier": "scored",
+        "hostinger": 5,
     },
     {
         "id": "findability.sitemap_declared",
@@ -140,7 +190,9 @@ CHECK_SPECS: list[dict[str, Any]] = [
         "category_label": "Findability",
         "name": "robots.txt points to the sitemap",
         "short_name": "Sitemap in robots.txt",
-        "weight": 3,
+        "weight": 4,
+        "tier": "scored",
+        "hostinger": 3,
     },
     {
         "id": "findability.sitemap_freshness",
@@ -148,7 +200,9 @@ CHECK_SPECS: list[dict[str, Any]] = [
         "category_label": "Findability",
         "name": "The sitemap says when pages last changed",
         "short_name": "lastmod in the sitemap",
-        "weight": 3,
+        "weight": 4,
+        "tier": "scored",
+        "hostinger": 3,
     },
     {
         "id": "findability.real_status_codes",
@@ -156,7 +210,9 @@ CHECK_SPECS: list[dict[str, Any]] = [
         "category_label": "Findability",
         "name": "A page that does not exist answers 404",
         "short_name": "Real 404s",
-        "weight": 3,
+        "weight": 4,
+        "tier": "scored",
+        "hostinger": 3,
     },
     {
         "id": "findability.redirect_hygiene",
@@ -165,15 +221,19 @@ CHECK_SPECS: list[dict[str, Any]] = [
         "name": "The homepage loads over HTTPS with at most one redirect",
         "short_name": "HTTPS, one hop",
         "weight": 2,
+        "tier": "scored",
+        "hostinger": 2,
     },
-    # 4. Structured meaning (14 pts)
+    # 4. Structured meaning (16 pts)
     {
         "id": "structured_meaning.json_ld_present",
         "category": "structured_meaning",
         "category_label": "Structured meaning",
         "name": "The page carries JSON-LD",
         "short_name": "JSON-LD",
-        "weight": 6,
+        "weight": 7,
+        "tier": "scored",
+        "hostinger": 6,
     },
     {
         "id": "structured_meaning.organization_completeness",
@@ -181,7 +241,9 @@ CHECK_SPECS: list[dict[str, Any]] = [
         "category_label": "Structured meaning",
         "name": "The Organization (or LocalBusiness) node is filled in",
         "short_name": "Organization filled in",
-        "weight": 4,
+        "weight": 5,
+        "tier": "scored",
+        "hostinger": 4,
     },
     {
         "id": "structured_meaning.same_as",
@@ -190,6 +252,8 @@ CHECK_SPECS: list[dict[str, Any]] = [
         "name": "sameAs ties the site to its profiles elsewhere",
         "short_name": "sameAs profiles",
         "weight": 2,
+        "tier": "scored",
+        "hostinger": 2,
     },
     {
         "id": "structured_meaning.schema_breadth",
@@ -198,15 +262,19 @@ CHECK_SPECS: list[dict[str, Any]] = [
         "name": "JSON-LD describes more than one kind of thing",
         "short_name": "Schema variety",
         "weight": 2,
+        "tier": "scored",
+        "hostinger": 2,
     },
-    # 5. Commercial legibility (12 pts)
+    # 5. Commercial legibility (15 pts)
     {
         "id": "commercial_legibility.trust_anchors",
         "category": "commercial_legibility",
         "category_label": "Commercial legibility",
         "name": "The homepage links to about, contact and legal pages",
         "short_name": "About, contact, legal",
-        "weight": 4,
+        "weight": 5,
+        "tier": "scored",
+        "hostinger": 4,
     },
     {
         "id": "commercial_legibility.machine_readable_contact",
@@ -214,7 +282,9 @@ CHECK_SPECS: list[dict[str, Any]] = [
         "category_label": "Commercial legibility",
         "name": "Contact details are text a machine can read",
         "short_name": "Readable contact",
-        "weight": 4,
+        "weight": 5,
+        "tier": "scored",
+        "hostinger": 4,
     },
     {
         "id": "commercial_legibility.pricing_reachable",
@@ -222,24 +292,30 @@ CHECK_SPECS: list[dict[str, Any]] = [
         "category_label": "Commercial legibility",
         "name": "Prices can be read without JavaScript or a login",
         "short_name": "Readable prices",
-        "weight": 4,
+        "weight": 5,
+        "tier": "scored",
+        "hostinger": 4,
     },
-    # 6. Agent-native content (10 pts)
+    # 6. Agent-native content (3 pts); llms.txt is experimental
     {
         "id": "agent_native_content.llms_txt_exists",
-        "category": "agent_native_content",
-        "category_label": "Agent-native content",
+        "category": "experimental",
+        "category_label": "Experimental standards",
         "name": "/llms.txt exists",
         "short_name": "llms.txt exists",
-        "weight": 4,
+        "weight": 0,
+        "tier": "experimental",
+        "hostinger": 4,
     },
     {
         "id": "agent_native_content.llms_txt_quality",
-        "category": "agent_native_content",
-        "category_label": "Agent-native content",
+        "category": "experimental",
+        "category_label": "Experimental standards",
         "name": "/llms.txt has a title and links",
         "short_name": "llms.txt title and links",
-        "weight": 3,
+        "weight": 0,
+        "tier": "experimental",
+        "hostinger": 3,
     },
     {
         "id": "agent_native_content.markdown_negotiation",
@@ -248,6 +324,8 @@ CHECK_SPECS: list[dict[str, Any]] = [
         "name": "Asking for Markdown gets Markdown back",
         "short_name": "Markdown on request",
         "weight": 2,
+        "tier": "scored",
+        "hostinger": 2,
     },
     {
         "id": "agent_native_content.link_headers",
@@ -256,23 +334,29 @@ CHECK_SPECS: list[dict[str, Any]] = [
         "name": "The homepage's Link header points to machine-readable versions",
         "short_name": "Link header",
         "weight": 1,
+        "tier": "scored",
+        "hostinger": 1,
     },
-    # 7. Agent interaction (10 pts)
+    # 7. Agent interaction: experimental, not scored
     {
         "id": "agent_interaction.webmcp_tools",
-        "category": "agent_interaction",
-        "category_label": "Agent interaction",
+        "category": "experimental",
+        "category_label": "Experimental standards",
         "name": "The page registers WebMCP tools for in-browser agents",
         "short_name": "WebMCP tools",
-        "weight": 6,
+        "weight": 0,
+        "tier": "experimental",
+        "hostinger": 6,
     },
     {
         "id": "agent_interaction.mcp_server_card",
-        "category": "agent_interaction",
-        "category_label": "Agent interaction",
+        "category": "experimental",
+        "category_label": "Experimental standards",
         "name": "An MCP Server Card is published",
         "short_name": "MCP Server Card",
-        "weight": 4,
+        "weight": 0,
+        "tier": "experimental",
+        "hostinger": 4,
     },
 ]
 
@@ -493,32 +577,44 @@ def _grade_for_score(score: int) -> tuple[str, str]:
     return "F", "Not agent-ready yet"
 
 
+def _points(weight: int, share: float) -> int:
+    """`share` of a check's `weight`, from 0 to 1, in whole points (halves round up)."""
+    return int(weight * share + 0.5)
+
+
 def single_check_prompt(domain: str, check: dict[str, Any]) -> str:
     """A prompt for a coding agent that fixes one failed check."""
-    return "\n".join(
-        [
-            f"On {domain}, make this true: {check['name']}.",
-            f"What the check found: {check['evidence']}",
-            f"Suggested change: {check.get('fix') or ''}",
-            "Change only what this needs, then tell me which files you touched.",
-        ]
-    )
+    lines = [
+        f"On {domain}, make this true: {check['name']}.",
+        f"What the check found: {check['evidence']}",
+        f"Suggested change: {check.get('fix') or ''}",
+    ]
+    if check.get("tier") == "experimental":
+        lines.append("This is an experimental standard: few agents use it yet, and it does not change the score.")
+    lines.append("Change only what this needs, then tell me which files you touched.")
+    return "\n".join(lines)
 
 
 def improve_score_prompt(domain: str, results: list[dict[str, Any]]) -> str:
-    """One prompt for a coding agent with every failed or partial check, most points first."""
-    actionable = [
-        r for r in results if r["status"] in ("fail", "partial") and r.get("fix")
-    ]
+    """One prompt for a coding agent with every scored check that failed or passed in part, most points
+    first. Failed experimental checks are named at the end and left out: they do not change the score."""
+    failing = [r for r in results if r["status"] in ("fail", "partial") and r.get("fix")]
+    actionable = [r for r in failing if r.get("tier", "scored") == "scored"]
+    left_out = [r["short_name"] for r in failing if r.get("tier") == "experimental"]
+    note = (
+        [f"Not in this list: {', '.join(left_out)}. These are experimental standards and do not change the score."]
+        if left_out
+        else []
+    )
     if not actionable:
-        return f"{domain} passed every check; nothing to fix."
+        return "\n\n".join([f"{domain} passed every scored check; nothing to fix.", *note])
     actionable.sort(key=lambda r: r["possible"] - r["earned"], reverse=True)
-    items = [
-        f"{idx}. {r['name']} ({r['possible'] - r['earned']} points)\n   Found: {r['evidence']}\n   Change: {r['fix']}"
-        for idx, r in enumerate(actionable, 1)
-    ]
+    items = []
+    for idx, r in enumerate(actionable, 1):
+        lost = r["possible"] - r["earned"]
+        items.append(f"{idx}. {r['name']} ({lost} point{'' if lost == 1 else 's'})\n   Found: {r['evidence']}\n   Change: {r['fix']}")
     return "\n\n".join(
-        [f"These checks failed on {domain}. Fix them in this order, and change only what each one needs:", *items]
+        [f"These checks failed on {domain}. Fix them in this order, and change only what each one needs:", *items, *note]
     )
 
 
@@ -571,34 +667,40 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
     def add_result(
         check_id: str,
         status: str,
-        earned: int,
+        share: float,
         evidence: str,
         fix: str | None = None,
     ) -> None:
+        """`share`: how much of the check passed, from 0 to 1. A scored check earns that share of its
+        weight; an experimental one earns nothing and carries the reason it is not scored."""
         spec = next(s for s in CHECK_SPECS if s["id"] == check_id)
+        scored = spec["tier"] == "scored"
         item: dict[str, Any] = {
             "check_id": check_id,
             "name": spec["name"],
             "short_name": spec["short_name"],
             "category": spec["category"],
             "category_label": spec["category_label"],
+            "tier": spec["tier"],
             "status": status,
-            "earned": earned,
+            "earned": _points(spec["weight"], share) if scored else 0,
             "possible": spec["weight"],
             "evidence": evidence,
             "fix": fix,
         }
+        if not scored:
+            item["why_not_scored"] = EXPERIMENTAL_WHY[check_id]
         if status in ("fail", "partial") and fix:
             item["prompt"] = single_check_prompt(domain, item)
         results.append(item)
 
-    # --- 1. CRAWL PERMISSION (20 pts) ---
-    # 1.1 robots_txt_valid (4 pts)
+    # --- 1. CRAWL PERMISSION (23 pts) ---
+    # 1.1 robots_txt_valid (5 pts)
     if robots_ok:
         add_result(
             "crawl_permission.robots_txt_valid",
             "pass",
-            4,
+            1,
             "robots.txt served and parsed.",
         )
     else:
@@ -610,13 +712,13 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Serve a robots.txt at /robots.txt.",
         )
 
-    # 1.2 ai_crawlers_allowed (7 pts)
+    # 1.2 ai_crawlers_allowed (8 pts)
     allowed_count = len(robots_info["allowed_bots"])
     if allowed_count == len(TRACKED_CRAWLERS):
         add_result(
             "crawl_permission.ai_crawlers_allowed",
             "pass",
-            7,
+            1,
             "All tracked AI crawlers may read the homepage.",
         )
     elif allowed_count == 0:
@@ -628,16 +730,16 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Remove the Disallow rules for these crawlers, unless keeping them out is the point.",
         )
     else:
-        pts = round(7 * allowed_count / len(TRACKED_CRAWLERS))
+        share = allowed_count / len(TRACKED_CRAWLERS)
         add_result(
             "crawl_permission.ai_crawlers_allowed",
             "partial",
-            pts,
+            share,
             f"Blocked by robots.txt: {', '.join(robots_info['blocked_bots'])}.",
             "Remove the Disallow rules for these crawlers, unless keeping them out is the point.",
         )
 
-    # 1.3 not_bot_blocked (6 pts)
+    # 1.3 not_bot_blocked (7 pts)
     if home_res["status"] in (401, 403, 429, 503):
         add_result(
             "crawl_permission.not_bot_blocked",
@@ -651,7 +753,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             add_result(
                 "crawl_permission.not_bot_blocked",
                 "partial",
-                3,
+                0.5,
                 "Homepage returned a bot challenge page to an AI agent user-agent.",
                 "Let AI agents' user agents through your firewall or bot protection.",
             )
@@ -659,7 +761,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             add_result(
                 "crawl_permission.not_bot_blocked",
                 "pass",
-                6,
+                1,
                 "Homepage loaded for an AI agent user-agent.",
             )
     else:
@@ -676,7 +778,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
         add_result(
             "crawl_permission.content_signals",
             "pass",
-            3,
+            1,
             f"Content-Signal declared: {robots_info['content_signals'][0]}.",
         )
     else:
@@ -688,7 +790,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             'Add a Content-Signal line to robots.txt saying how the content may be used, for example "search=yes, ai-train=no".',
         )
 
-    # --- 2. FINDABILITY (16 pts) ---
+    # --- 2. FINDABILITY (20 pts) ---
     sitemap_entries = 0
     sitemap_is_index = False
     newest_lastmod: dt.date | None = None
@@ -731,13 +833,13 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
         except Exception:
             sitemap_entries = 0
 
-    # 2.1 sitemap_valid (5 pts)
+    # 2.1 sitemap_valid (6 pts)
     if sitemap_entries > 0:
         kind = "sitemap index" if sitemap_is_index else "sitemap"
         add_result(
             "findability.sitemap_valid",
             "pass",
-            5,
+            1,
             f"Valid {kind} with {sitemap_entries} entries.",
         )
     else:
@@ -749,12 +851,12 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Serve a sitemap.xml that lists the pages you want read.",
         )
 
-    # 2.2 sitemap_declared (3 pts)
+    # 2.2 sitemap_declared (4 pts)
     if robots_info["sitemaps"]:
         add_result(
             "findability.sitemap_declared",
             "pass",
-            3,
+            1,
             f"Declared: {robots_info['sitemaps'][0]}.",
         )
     else:
@@ -766,7 +868,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             'Add a "Sitemap: https://your-domain/sitemap.xml" line to robots.txt.',
         )
 
-    # 2.3 sitemap_freshness (3 pts)
+    # 2.3 sitemap_freshness (4 pts)
     if sitemap_entries == 0:
         add_result(
             "findability.sitemap_freshness",
@@ -778,7 +880,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
         add_result(
             "findability.sitemap_freshness",
             "pass",
-            3,
+            1,
             f"Newest lastmod is {newest_lastmod.isoformat()}.",
         )
     else:
@@ -795,12 +897,12 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Give each URL in the sitemap a <lastmod> date.",
         )
 
-    # 2.4 real_status_codes (3 pts)
+    # 2.4 real_status_codes (4 pts)
     if probe_404_res["status"] in (404, 410):
         add_result(
             "findability.real_status_codes",
             "pass",
-            3,
+            1,
             "A non-existent URL correctly returned a not-found status.",
         )
     else:
@@ -826,7 +928,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
         add_result(
             "findability.redirect_hygiene",
             "pass",
-            2,
+            1,
             ev,
         )
     else:
@@ -838,24 +940,24 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Redirect straight to the final address, in one step.",
         )
 
-    # --- 3. READABILITY (18 pts) ---
+    # --- 3. READABILITY (23 pts) ---
     full_text = " ".join(t.strip() for t in dom.text_chunks if t.strip())
     text_len = len(full_text)
     html_len = len(home_res["text"])
 
-    # 3.1 content_without_js (8 pts)
+    # 3.1 content_without_js (10 pts)
     if text_len >= 600:
         add_result(
             "readability.content_without_js",
             "pass",
-            8,
+            1,
             "Raw HTML contains plenty of readable text.",
         )
     elif text_len >= 200:
         add_result(
             "readability.content_without_js",
             "partial",
-            4,
+            0.5,
             "Raw HTML contains little text - thin for a homepage.",
             "Render the main text on the server, so it is in the HTML before any script runs.",
         )
@@ -868,13 +970,13 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Render the main text on the server, so it is in the HTML before any script runs.",
         )
 
-    # 3.2 token_budget (3 pts)
+    # 3.2 token_budget (4 pts)
     ratio = (text_len / html_len) if html_len > 0 else 0.0
     if 0 < html_len <= 400_000 and ratio >= 0.05:
         add_result(
             "readability.token_budget",
             "pass",
-            3,
+            1,
             "The HTML is a reasonable size with enough readable text.",
         )
     else:
@@ -886,7 +988,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Move inline scripts and styles out and drop wrapper markup: a reader pays for every token of the page.",
         )
 
-    # 3.3 head_metadata (4 pts)
+    # 3.3 head_metadata (5 pts)
     missing_head: list[str] = []
     if not dom.title:
         missing_head.append("title")
@@ -899,15 +1001,15 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
         add_result(
             "readability.head_metadata",
             "pass",
-            4,
+            1,
             "Title, meta description and canonical link are present.",
         )
     elif present_head > 0:
-        pts = round(4 * present_head / 3)
+        share = present_head / 3
         add_result(
             "readability.head_metadata",
             "partial",
-            pts,
+            share,
             f"Missing: {', '.join(missing_head)}.",
             "Add the missing <title>, meta description or canonical link.",
         )
@@ -920,19 +1022,19 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Add the missing <title>, meta description or canonical link.",
         )
 
-    # 3.4 heading_structure (3 pts)
+    # 3.4 heading_structure (4 pts)
     if dom.h1_count == 1:
         add_result(
             "readability.heading_structure",
             "pass",
-            3,
+            1,
             f"One <h1> and {dom.heading_count} headings in total.",
         )
     elif dom.h1_count > 1:
         add_result(
             "readability.heading_structure",
             "partial",
-            2,
+            2 / 3,
             f"Found {dom.h1_count} <h1> elements ({dom.heading_count} headings total).",
             "Keep one <h1> and turn the others into <h2>.",
         )
@@ -945,7 +1047,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Add one <h1> that says what the page is about.",
         )
 
-    # --- 4. STRUCTURED MEANING (14 pts) ---
+    # --- 4. STRUCTURED MEANING (16 pts) ---
     json_ld_nodes = _flatten_json_ld(dom.json_ld_raw)
     all_types: list[str] = []
     for n in json_ld_nodes:
@@ -953,12 +1055,12 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             if t not in all_types:
                 all_types.append(t)
 
-    # 4.1 json_ld_present (6 pts)
+    # 4.1 json_ld_present (7 pts)
     if json_ld_nodes:
         add_result(
             "structured_meaning.json_ld_present",
             "pass",
-            6,
+            1,
             f"Found {len(json_ld_nodes)} JSON-LD node(s): {', '.join(all_types)}.",
         )
     else:
@@ -970,7 +1072,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Add a JSON-LD block saying who runs the site and what it offers: the plainest statement an agent can read.",
         )
 
-    # 4.2 organization_completeness (4 pts)
+    # 4.2 organization_completeness (5 pts)
     org_types = {"Organization", "LocalBusiness", "Store", "Restaurant", "Corporation"}
     org_node = next(
         (n for n in json_ld_nodes if org_types.intersection(_node_types(n))),
@@ -992,15 +1094,15 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             add_result(
                 "structured_meaning.organization_completeness",
                 "pass",
-                4,
+                1,
                 "Organization/LocalBusiness node has name, url, telephone and address.",
             )
         else:
-            pts = round(4 * present_org / 4)
+            share = present_org / 4
             add_result(
                 "structured_meaning.organization_completeness",
-                "partial" if pts > 0 else "fail",
-                pts,
+                "partial" if present_org else "fail",
+                share,
                 f"Business node is missing: {', '.join(missing_org)}.",
                 "Fill in the missing fields (name, url, logo, contact) so questions about the business have an answer on the page.",
             )
@@ -1017,7 +1119,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
         add_result(
             "structured_meaning.same_as",
             "pass",
-            2,
+            1,
             f"Linked to {len(same_as_links)} external profile(s) via sameAs.",
         )
     else:
@@ -1034,14 +1136,14 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
         add_result(
             "structured_meaning.schema_breadth",
             "pass",
-            2,
+            1,
             f"Declares {len(all_types)} schema types: {', '.join(all_types)}.",
         )
     elif len(all_types) >= 1:
         add_result(
             "structured_meaning.schema_breadth",
             "partial",
-            1,
+            0.5,
             f"Only declares {len(all_types)} schema type(s): {', '.join(all_types)}.",
             "Give the other things on the site their own types too: products, services, articles, FAQs.",
         )
@@ -1054,7 +1156,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Add JSON-LD for the business, the site and the main kinds of content.",
         )
 
-    # --- 5. COMMERCIAL LEGIBILITY (12 pts) ---
+    # --- 5. COMMERCIAL LEGIBILITY (15 pts) ---
     non_editorial_paths: list[str] = []
     has_mailto_or_tel = False
     for href in dom.links:
@@ -1068,7 +1170,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             continue
         non_editorial_paths.append(path)
 
-    # 5.1 trust_anchors (4 pts)
+    # 5.1 trust_anchors (5 pts)
     has_about = any("about" in p for p in non_editorial_paths)
     has_contact = any("contact" in p for p in non_editorial_paths)
     has_legal = any(
@@ -1087,15 +1189,15 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
         add_result(
             "commercial_legibility.trust_anchors",
             "pass",
-            4,
+            1,
             "About, contact and legal/privacy pages are linked from the homepage.",
         )
     elif found_trust > 0:
-        pts = round(4 * found_trust / 3)
+        share = found_trust / 3
         add_result(
             "commercial_legibility.trust_anchors",
             "partial",
-            pts,
+            share,
             f"No link found for: {', '.join(missing_trust)}.",
             "Link the missing pages from the homepage.",
         )
@@ -1108,7 +1210,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Link about, contact and terms pages from the homepage: they show there is a real business behind the site.",
         )
 
-    # 5.2 machine_readable_contact (4 pts)
+    # 5.2 machine_readable_contact (5 pts)
     has_schema_contact = any(
         n.get("telephone") or n.get("email") or n.get("contactPoint")
         for n in json_ld_nodes
@@ -1117,14 +1219,14 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
         add_result(
             "commercial_legibility.machine_readable_contact",
             "pass",
-            4,
+            1,
             "Structured data exposes contactPoint.",
         )
     elif has_mailto_or_tel:
         add_result(
             "commercial_legibility.machine_readable_contact",
             "pass",
-            4,
+            1,
             "Homepage includes a mailto: or tel: link.",
         )
     else:
@@ -1136,7 +1238,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Put an email address or phone number in text: a mailto:/tel: link, or the email/telephone field in JSON-LD. A number inside an image cannot be read.",
         )
 
-    # 5.3 pricing_reachable (4 pts)
+    # 5.3 pricing_reachable (5 pts)
     price_types = {"Product", "Offer", "AggregateOffer"}
     has_schema_price = any(
         price_types.intersection(_node_types(n)) or n.get("offers")
@@ -1150,14 +1252,14 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
         add_result(
             "commercial_legibility.pricing_reachable",
             "pass",
-            4,
+            1,
             "Prices are exposed in structured data.",
         )
     elif has_pricing_link:
         add_result(
             "commercial_legibility.pricing_reachable",
             "pass",
-            4,
+            1,
             "Homepage links directly to a pricing/plans page.",
         )
     else:
@@ -1169,7 +1271,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Link a pricing page from the homepage, or add Offer markup with a price and a currency.",
         )
 
-    # --- 6. AGENT-NATIVE CONTENT (10 pts) ---
+    # --- 6. AGENT-NATIVE CONTENT (3 pts; llms.txt experimental) ---
     llms_text = llms_res["text"].strip()
     llms_is_html = bool(
         re.match(r"^\s*<(?:!doctype\s+html|html|head|body)\b", llms_text, re.I)
@@ -1180,12 +1282,12 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
         and not llms_is_html
     )
 
-    # 6.1 llms_txt_exists (4 pts)
+    # 6.1 llms_txt_exists (experimental, not scored)
     if llms_ok:
         add_result(
             "agent_native_content.llms_txt_exists",
             "pass",
-            4,
+            1,
             "/llms.txt is served as a text file.",
         )
     else:
@@ -1197,7 +1299,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Serve an /llms.txt with a short summary of the site and links to its main pages.",
         )
 
-    # 6.2 llms_txt_quality (3 pts)
+    # 6.2 llms_txt_quality (experimental, not scored)
     if not llms_ok:
         add_result(
             "agent_native_content.llms_txt_quality",
@@ -1212,14 +1314,14 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             add_result(
                 "agent_native_content.llms_txt_quality",
                 "pass",
-                3,
+                1,
                 f"Has a top-level heading and {len(md_links)} link(s).",
             )
         else:
             add_result(
                 "agent_native_content.llms_txt_quality",
                 "partial",
-                1,
+                1 / 3,
                 "llms.txt is missing a top-level '# ' heading or Markdown http(s) links.",
                 "Start /llms.txt with a '# Title' line and link the main pages as Markdown links: [Title](https://...).",
             )
@@ -1230,7 +1332,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
         add_result(
             "agent_native_content.markdown_negotiation",
             "pass",
-            2,
+            1,
             f"Homepage returned '{md_ct}' for Accept: text/markdown.",
         )
     else:
@@ -1242,7 +1344,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Return Markdown when a request asks for text/markdown: it is far shorter than the HTML.",
         )
 
-    # 6.4 link_headers (1 pt)
+    # 6.4 link_headers (1 pts)
     link_hdr = home_res["headers"].get("link", "")
     if link_hdr:
         add_result(
@@ -1260,14 +1362,14 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Send a Link header (RFC 8288) that points to llms.txt or to a Markdown version of the page.",
         )
 
-    # --- 7. AGENT INTERACTION (10 pts) ---
-    # 7.1 webmcp_tools (6 pts)
+    # --- 7. AGENT INTERACTION (experimental, not scored) ---
+    # 7.1 webmcp_tools (experimental, not scored)
     has_js_webmcp = "modelcontext" in home_res["text"].lower() and "registertool" in home_res["text"].lower()
     if dom.webmcp_forms or has_js_webmcp:
         add_result(
             "agent_interaction.webmcp_tools",
             "pass",
-            6,
+            1,
             "WebMCP tool registration or annotated form detected on the homepage.",
         )
     else:
@@ -1279,7 +1381,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Register a tool when the page loads (navigator.modelContext.registerTool with a name, a description, an input schema and a function), or mark a form with toolname and tooldescription.",
         )
 
-    # 7.2 mcp_server_card (4 pts)
+    # 7.2 mcp_server_card (experimental, not scored)
     mcp_ok = False
     mcp_ev = "/.well-known/mcp/server-card.json did not return HTTP 200."
     if 200 <= mcp_card_res["status"] < 300 and mcp_card_res["text"].strip():
@@ -1310,7 +1412,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
         add_result(
             "agent_interaction.mcp_server_card",
             "pass",
-            4,
+            1,
             mcp_ev,
         )
     else:
@@ -1322,7 +1424,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "Serve an MCP Server Card (SEP-1649) at /.well-known/mcp/server-card.json: the server's name, version, endpoint and capabilities.",
         )
 
-    # Aggregate categories & total score
+    # Aggregate categories & total score: the scored categories only; experimental checks are in none
     categories_summary: dict[str, dict[str, int]] = {}
     total_earned = 0
     for cat_id, _cat_label, cat_weight in CATEGORIES:
@@ -1336,6 +1438,7 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
             "possible": cat_weight,
         }
 
+    experimental = [r for r in results if r["tier"] == "experimental"]
     grade, grade_label = _grade_for_score(total_earned)
     return {
         "domain": domain,
@@ -1345,9 +1448,33 @@ def scan_domain(raw_domain: str) -> dict[str, Any]:
         "grade_label": grade_label,
         "scanned_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "categories": categories_summary,
+        "experimental": {
+            "scored": False,
+            "passed": sum(r["status"] == "pass" for r in experimental),
+            "checks": len(experimental),
+        },
         "results": results,
         "improve_prompt": improve_score_prompt(domain, results),
     }
+
+
+def _check_lines(r: dict[str, Any]) -> list[str]:
+    icon = {
+        "pass": "✓",
+        "partial": "◐",
+        "fail": "✗",
+        "not_applicable": "○",
+    }.get(r["status"], "?")
+    if r["status"] == "not_applicable":
+        pts_str = "Not checked"
+    elif r.get("tier") == "experimental":
+        pts_str = "not scored"
+    else:
+        pts_str = f"{r['earned']}/{r['possible']} pts"
+    out = [f"  {icon} {r['short_name']} [{pts_str}]", f"      What we found: {r['evidence']}"]
+    if r.get("fix"):
+        out.append(f"      How to fix:    {r['fix']}")
+    return out
 
 
 def format_report(scan: dict[str, Any], show_prompts: bool = True) -> str:
@@ -1367,23 +1494,20 @@ def format_report(scan: dict[str, Any], show_prompts: bool = True) -> str:
             f"## {cat_label}: {cat_info['earned']}/{cat_weight} pts ({pct}%)"
         )
         for r in scan["results"]:
-            if r["category"] != cat_id:
-                continue
-            icon = {
-                "pass": "✓",
-                "partial": "◐",
-                "fail": "✗",
-                "not_applicable": "○",
-            }.get(r["status"], "?")
-            pts_str = (
-                "Not checked"
-                if r["status"] == "not_applicable"
-                else f"{r['earned']}/{r['possible']} pts"
-            )
-            lines.append(f"  {icon} {r['short_name']} [{pts_str}]")
-            lines.append(f"      What we found: {r['evidence']}")
-            if r.get("fix"):
-                lines.append(f"      How to fix:    {r['fix']}")
+            if r["category"] == cat_id:
+                lines.extend(_check_lines(r))
+        lines.append("")
+
+    experimental = [r for r in scan["results"] if r.get("tier") == "experimental"]
+    if experimental:
+        lines.append(f"## {EXPERIMENTAL[1]}: not scored")
+        lines.append("   Few sites publish these and few agents read them yet. The score above leaves them out.")
+        reasons_shown: set[str] = set()
+        for r in experimental:
+            lines.extend(_check_lines(r))
+            if r["why_not_scored"] not in reasons_shown:      # the two llms.txt checks share one reason
+                reasons_shown.add(r["why_not_scored"])
+                lines.append(f"      Why not scored: {r['why_not_scored']}")
         lines.append("")
 
     if show_prompts:
@@ -1394,8 +1518,10 @@ def format_report(scan: dict[str, Any], show_prompts: bool = True) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Can AI crawlers and agents read your site? 26 checks, 100 points, and a prompt for a coding agent to fix what failed."
+        description="Can AI crawlers and agents read your site? 22 scored checks out of 100, 4 experimental "
+        "standards reported apart, and a prompt for a coding agent to fix what failed."
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("domain", help="domain or URL to check, e.g. example.com")
     parser.add_argument("--json", action="store_true", help="Output raw JSON")
     parser.add_argument("--prompts", action="store_true", help=argparse.SUPPRESS)   # the prompt is shown by default
