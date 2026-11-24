@@ -4,15 +4,17 @@
 
 AI 爬虫和 agent 能不能读懂、用上你的网站？一条命令查 26 项。其中 22 项是 AI 爬虫和 agent 现在就会用到的，计入总分，满分 100。另外 4 项是实验标准（llms.txt、WebMCP、MCP Server Card），报告里单独列一节，不计入总分。它还会写一段提示词，粘给 Claude Code、Cursor、Codex 这类编程 agent 就能照着改。
 
+> **2026-11-24 起归档。** 命令行版不再维护。它没有发到 PyPI，所以 `uvx ai-visibility-checker` 和 `pip install ai-visibility-checker` 都装不上。请用网页版 [jasonzhu.ai/zh/go-global/ai-readiness](https://jasonzhu.ai/zh/go-global/ai-readiness)，或者直接从 GitHub 跑这份代码：
+
 ```bash
-uvx ai-visibility-checker example.com
+uvx --from git+https://github.com/zhuyansen/ai-visibility-checker ai-visibility-checker example.com
 ```
 
-也可以 `pip install ai-visibility-checker`，再运行 `ai-visibility-checker example.com`。要 Python 3.10 以上，没有依赖，不要 key，免费。想跑仓库里最新的代码：`uvx --from git+https://github.com/zhuyansen/ai-visibility-checker ai-visibility-checker example.com`。
+要 Python 3.10 以上，没有依赖，不要 key，免费。
 
 它只对你给的网站发普通的 HTTP 请求，用的是 AI agent 的身份（ChatGPT-User）：首页、再要一次首页的 Markdown 版、robots.txt、站点地图（如果是索引，再读它的第一个文件）、llms.txt、/.well-known/mcp/server-card.json，以及一个不存在的网址（看缺页是不是返回 404）。
 
-网页版用的是同一套检查：[jasonzhu.ai/zh/go-global/ai-readiness](https://jasonzhu.ai/zh/go-global/ai-readiness)。但网页版目前仍把实验标准算进总分，等级的分界线也不同，所以两边的分数暂时对不上。
+网页版用的是同一套检查：[jasonzhu.ai/zh/go-global/ai-readiness](https://jasonzhu.ai/zh/go-global/ai-readiness)。但网页版目前仍把实验标准算进总分，等级的分界线也不同，所以两边的分数对不上。
 
 ## 计入总分的
 

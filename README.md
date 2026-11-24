@@ -4,15 +4,17 @@
 
 Can AI crawlers and agents read, understand and use your website? One command runs 26 checks. The 22 that AI crawlers and agents use today make the score, out of 100. The other 4 are experimental standards (llms.txt, WebMCP, an MCP Server Card): the report lists them apart, and the score leaves them out. It also writes a prompt you can paste into a coding agent (Claude Code, Cursor, Codex) to fix what failed.
 
+> **Archived on 24 November 2026.** This command-line version is no longer maintained. It was never published to PyPI, so `uvx ai-visibility-checker` and `pip install ai-visibility-checker` do not work. Use the web version, [jasonzhu.ai/en/go-global/ai-readiness](https://jasonzhu.ai/en/go-global/ai-readiness), or run this code straight from GitHub:
+
 ```bash
-uvx ai-visibility-checker example.com
+uvx --from git+https://github.com/zhuyansen/ai-visibility-checker ai-visibility-checker example.com
 ```
 
-Or `pip install ai-visibility-checker`, then `ai-visibility-checker example.com`. Python 3.10 or newer, no dependencies, no keys, free. The repository's latest code: `uvx --from git+https://github.com/zhuyansen/ai-visibility-checker ai-visibility-checker example.com`.
+Python 3.10 or newer, no dependencies, no keys, free.
 
 It makes plain HTTP requests to the site you name, with an AI agent's user agent (ChatGPT-User): the homepage, the homepage again asking for Markdown, robots.txt, the sitemap (and the first file of a sitemap index), llms.txt, /.well-known/mcp/server-card.json, and one made-up URL to see whether missing pages answer 404.
 
-A web version runs the same checks in the browser: [jasonzhu.ai/en/go-global/ai-readiness](https://jasonzhu.ai/en/go-global/ai-readiness). It still scores the experimental standards and draws its grades at other points, so for now its score differs from this one.
+A web version runs the same checks in the browser: [jasonzhu.ai/en/go-global/ai-readiness](https://jasonzhu.ai/en/go-global/ai-readiness). It still scores the experimental standards and draws its grades at other points, so its score differs from this one.
 
 ## What makes the score
 
